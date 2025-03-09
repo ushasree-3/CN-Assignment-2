@@ -30,7 +30,7 @@ def run_single_client_experiment():
         sleep(1)  # Ensure tcpdump starts properly
 
         # Run iperf3 client on H1
-        h1.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 60 -C {cc}')
+        h1.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 150 -C {cc}')
         sleep(5)  # Give time for data transfer to settle
 
         # Stop tcpdump
