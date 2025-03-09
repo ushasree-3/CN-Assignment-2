@@ -41,7 +41,7 @@ def run_experiment():
                 host.cmd(f'echo {cc} > /proc/sys/net/ipv4/tcp_congestion_control')
 
             # Start packet capture for this condition
-            h7.cmd(f'tcpdump -i any -w condition{condition}_{cc}.pcap &')
+            h7.cmd(f'tcpdump -i any -w c_{condition}_{cc}.pcap &')
 
             # Start iPerf3 clients
             for client in clients:
