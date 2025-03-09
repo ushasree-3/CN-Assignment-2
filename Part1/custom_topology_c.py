@@ -1,50 +1,43 @@
+from mininet.topo import Topo
 from mininet.net import Mininet
-from mininet.node import RemoteController, OVSSwitch
 from mininet.cli import CLI
-from mininet.log import setLogLevel
-from time import sleep
+from mininet.link import TCLink
 
-from custom_topology_c import CustomTopologyC  # Import topology
+class CustomTopologyC(Topo):
+    def build(self):
+        # Add hosts
+        h1 = self.addHost('h1')
+        h2 = self.addHost('h2')
+        h3 = self.addHost('h3')
+        h4 = self.addHost('h4')
+        h5 = self.addHost('h5')
+        h6 = self.addHost('h6')
+        h7 = self.addHost('h7')
 
-def run_experiment():
-    net = Mininet(topo=CustomTopologyC(), switch=OVSSwitch, link=TCLink, controller=None)
-    net.start()
+        # Add switches
+        s1 = self.addSwitch('s1')
+        s2 = self.addSwitch('s2')
+        s3 = self.addSwitch('s3')
+        s4 = self.addSwitch('s4')
 
-    h3 = net.get('h3')
-    h7 = net.get('h7')  # Server
+        # Define links with bandwidth constraints
+        self.addLink(s1, s2, bw=100, max_queue_size=50, use_htb=True, r2q=10)
+        self.addLink(s2, s3, bw=50, max_queue_size=25, use_htb=True, r2q=5)
+        self.addLink(s3, s4, bw=100, max_queue_size=50, use_htb=True, r2q=10)
+        self.addLink(s2, s4, bw=100, max_queue_size=50, use_htb=True, r2q=10)
 
-    print("Starting iPerf3 server on H7...")
-    h7.cmd('iperf3 -s -D &')
-
-    sleep(2)
-    congestion_algorithms = ["bbr", "highspeed", "yeah"]
-    for cc in congestion_algorithms:
-        print(f"\nTesting with TCP congestion control: {cc}")
-
-        # === Condition 1: H3 (Client) -> H7 (Server) ===
-
-        h3.cmd(f'echo {cc} > /proc/sys/net/ipv4/tcp_congestion_control')
-        # Start tcpdump for packet capture
-        h7.cmd(f'tcpdump -i any -w c1_{cc}.pcap &')
-        sleep(2)  # Allow tcpdump to initialize
-
-        print("Running test: H3 -> H7")
-        h3.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 150 -C {cc} &')
-
-        sleep(20)
-
-        # Stop tcpdump and save PCAP file
-        h7.cmd('killall -9 tcpdump')
-        print(f"Test completed for {cc}. PCAP saved as c1_{cc}.pcap")
-
-        # Ensure no lingering iPerf3 processes
-        h7.cmd('killall -9 iperf3')
-
-    print("Test completed. ")
-
-    CLI(net)
-    net.stop()
+        # Hosts to switches
+        self.addLink(h1, s1)
+        self.addLink(h2, s1)
+        self.addLink(h3, s2)
+        self.addLink(h4, s3)
+        self.addLink(h5, s3)
+        self.addLink(h6, s4)
+        self.addLink(h7, s4)
 
 if __name__ == '__main__':
-    setLogLevel('info')
-    run_experiment()
+    topo = CustomTopologyC()
+    net = Mininet(topo=topo, link=TCLink)
+    net.start()
+    CLI(net)  # Start CLI for testing
+    net.stop()
