@@ -3,6 +3,7 @@ from mininet.node import RemoteController, OVSSwitch
 from mininet.cli import CLI
 from mininet.log import setLogLevel
 from time import sleep
+from mininet.link import TCLink
 
 from custom_topology_c import CustomTopologyC  # Import topology
 
