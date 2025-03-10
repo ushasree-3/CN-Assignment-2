@@ -3,13 +3,13 @@ from mininet.net import Mininet
 from mininet.node import RemoteController, OVSSwitch
 from mininet.cli import CLI
 
-class CustomTopology(Topo):
+class Topology(Topo):
     def build(self):
         # Create switches
-        s1 = self.addSwitch('s1', protocols='OpenFlow13')
-        s2 = self.addSwitch('s2', protocols='OpenFlow13')
-        s3 = self.addSwitch('s3', protocols='OpenFlow13')
-        s4 = self.addSwitch('s4', protocols='OpenFlow13')
+        s1 = self.addSwitch('s1')
+        s2 = self.addSwitch('s2')
+        s3 = self.addSwitch('s3')
+        s4 = self.addSwitch('s4')
 
         # Create hosts
         h1 = self.addHost('h1')
@@ -35,13 +35,7 @@ class CustomTopology(Topo):
         self.addLink(s3, s4)
 
 if __name__ == '__main__':
-    topo = CustomTopology()
-    net = Mininet(topo=topo, switch=OVSSwitch, controller=None)  # No local controller
-
-    # Add a remote SDN controller (Run OVS Controller separately)
-    remote_controller = RemoteController('c0', ip='127.0.0.1', port=6633)
-    net.addController(remote_controller)
-
+    net = Mininet(topo=Topology()) 
     net.start()
     CLI(net)  # Keep the Mininet CLI open
     net.stop()
