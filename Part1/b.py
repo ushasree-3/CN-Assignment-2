@@ -1,60 +1,52 @@
 from mininet.net import Mininet
-from mininet.node import OVSSwitch
 from mininet.cli import CLI
-from mininet.log import setLogLevel
-from time import sleep
+from topology import Topology
+import time
 
-from custom_topology import CustomTopology
-
-def run_multi_client_experiment():
-    net = Mininet(topo=CustomTopology(), switch=OVSSwitch, controller=None)
+def run_experiment():
+    net = Mininet(topo=Topology())
     net.start()
 
-    h1, h3, h4 = net.get('h1'), net.get('h3'), net.get('h4')  # Clients
-    h7 = net.get('h7')  # Server
+    server = net.get('h7')
+    client1 = net.get('h1')
+    client2 = net.get('h3')
+    client3 = net.get('h4')
 
-    print("Starting iPerf3 server on H7...")
-    h7.cmd('iperf3 -s -D')
-    sleep(2)  # Wait for server to initialize
+    # Start TCP server in the background
+    server.cmd('iperf3 -s &')
 
-    congestion_algorithms = ["bbr", "highspeed", "yeah"]
+    # Congestion control schemes
+    cc = ["bbr","highspeed","yeah"]
 
-    for cc in congestion_algorithms:
-        print(f"\nRunning test with congestion control: {cc}")
+    for scheme in cc:
+        print(f"Running experiment with {scheme} congestion control...")
 
-        # Set TCP congestion control individually per host
-        for host in [h1, h3, h4]:
-            host.cmd(f'echo {cc} > /proc/sys/net/ipv4/tcp_congestion_control')
+        # Save PCAP in the same directory as the script
+        pcap_file = f"$(pwd)/outputs/b_{scheme}.pcap"  # Uses current working directory
+        server.cmd(f'tcpdump -i h7-eth0 -w {pcap_file} &')
+        time.sleep(2)  # Allow tcpdump to initialize
 
-        # Start tcpdump on the server to capture traffic
-        h7.cmd(f'tcpdump -i any port 5201 -w b_{cc}.pcap &')
-        sleep(2)  # Allow tcpdump to initialize
+        # Start iperf3 clients in a staggered manner
+        client1.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} &')
+        time.sleep(15)  # Wait 15s before starting next client
 
-        # Start staggered clients
-        print("Starting H1 at T=0s")
-        h1.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 150 -C {cc} &')
-        sleep(15)
+        client2.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 120 -C {scheme} &')
+        time.sleep(15)  # Wait 15s before starting next client
 
-        print("Starting H3 at T=15s")
-        h3.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 120 -C {cc} &')
-        sleep(15)
+        client3.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 90 -C {scheme} &')
 
-        print("Starting H4 at T=30s")
-        h4.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 90 -C {cc} &')
-        sleep(100)  # Wait for transfers to finish
+        # Wait for all clients to complete
+        time.sleep(160)  # Max duration (H1 runs for 150s)
 
-        # Stop tcpdump and ensure PCAP is saved
-        h7.cmd('killall -9 tcpdump')
-        print(f"Test completed for {cc}. PCAP saved as b_{cc}.pcap")
+        # Stop tcpdump after test
+        server.cmd('pkill -f tcpdump')
+        time.sleep(5)  # Ensure all packets are written to PCAP
 
-        # Stop any running iPerf3 processes
-        h7.cmd('killall -9 iperf3')
+        print(f"PCAP file saved at: {scheme}.pcap")
 
-    print("\nExperiments completed. Check PCAP files.")
-
+    print("Experiment complete.")
     CLI(net)
     net.stop()
 
 if __name__ == '__main__':
-    setLogLevel('info')
-    run_multi_client_experiment()
+    run_experiment()
