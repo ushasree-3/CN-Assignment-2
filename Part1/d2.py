@@ -1,54 +1,44 @@
+from mininet.topo import Topo
+from mininet.link import TCLink
 from mininet.net import Mininet
-from mininet.node import OVSSwitch
+from mininet.node import RemoteController, OVSSwitch
 from mininet.cli import CLI
-from mininet.log import setLogLevel
-from time import sleep
 
-from custom_topology_c import CustomTopologyC
+class Topology(Topo):
+    def build(self, loss=0):  # Link loss parameter added (default 0)
+        # Create switches
+        s1 = self.addSwitch('s1')
+        s2 = self.addSwitch('s2')
+        s3 = self.addSwitch('s3')
+        s4 = self.addSwitch('s4')
 
-def run_experiment(loss):
-    net = Mininet(topo=CustomTopologyC(loss=loss), switch=OVSSwitch, controller=None)
-    net.start()
+        # Create hosts
+        h1 = self.addHost('h1')
+        h2 = self.addHost('h2')
+        h3 = self.addHost('h3')
+        h4 = self.addHost('h4')
+        h5 = self.addHost('h5')
+        h6 = self.addHost('h6')
+        h7 = self.addHost('h7')  # TCP Server
 
-    h1 = net.get('h1')
-    h2 = net.get('h2')
-    h3 = net.get('h3')
-    h4 = net.get('h4')
-    h7 = net.get('h7')
+        # Connect hosts to switches
+        self.addLink(h1, s1)
+        self.addLink(h2, s1)
+        self.addLink(h3, s2)
+        self.addLink(h4, s3)
+        self.addLink(h5, s3)
+        self.addLink(h6, s4)
+        self.addLink(h7, s4)  # H7 is the server
 
-    print(f"Starting iPerf3 server on H7 with S2-S3 loss={loss}%...")
-    h7.cmd('iperf3 -s -D &')  # Start iPerf3 server in daemon mode
-    sleep(2)
-
-    congestion_algos = ['bbr', 'highspeed', 'yeah']
-    conditions = {
-        "2a": ["H1", "H2"],
-        "2b": ["H1", "H3"],
-        "2c": ["H1", "H3", "H4"]
-    }
-
-    for cc in congestion_algos:
-        print(f"\nTesting congestion control: {cc} with S2-S3 loss={loss}%")
-        for condition, clients in conditions.items():
-            print(f"Running test: {', '.join(clients)} -> H7 with {cc}")
-
-            for client in clients:
-                host = net.get(client.lower())
-                host.cmd(f'echo {cc} > /proc/sys/net/ipv4/tcp_congestion_control')
-
-            h7.cmd(f'tcpdump -i any -w d_{condition}_{cc}_loss{loss}.pcap &')
-
-            for client in clients:
-                host = net.get(client.lower())
-                host.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 150 &')
-
-            sleep(20)
-            h7.cmd('killall -9 tcpdump')
-
-    CLI(net)
-    net.stop()
+        # Configure links with bandwidth and loss
+        self.addLink(s1, s2, bw=100)  # 100Mbps S1-S2
+        self.addLink(s2, s3, bw=50, loss=loss)  # 50Mbps S2-S3 with loss
+        self.addLink(s3, s4, bw=100)  # 100Mbps S3-S4
 
 if __name__ == '__main__':
-    setLogLevel('info')
-    for loss in [1, 5]:  # Run experiment with 1% and 5% loss
-        run_experiment(loss)
+    for loss in [1, 5]:  # Run tests for 1% and 5% loss
+        print(f"Running topology with {loss}% loss on S2-S3")
+        net = Mininet(topo=Topology(loss=loss), link=TCLink)
+        net.start()
+        CLI(net)  # Keep Mininet CLI open for testing
+        net.stop()
