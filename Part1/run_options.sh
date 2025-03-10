@@ -21,15 +21,12 @@ case "$option" in
     c)
         echo "Running c.py"
         sudo python3 c.py
-        sudo python3 c_2a.py
-        sudo python3 c_2b.py
-        sudo python3 c_2c.py
+        sudo python3 c2.py
         ;;
     d)
-        echo "Running d.py and loss=1..."
-        sudo python3 d.py 1
-        echo "Running d.py and loss=5..."
-        sudo python3 d.py 5
+        echo "Running d.py"
+        sudo python3 d.py
+        sudo python3 d2.py
         ;;
     *)
         echo "Invalid option. Usage: ./run_script --option={a|b|c|d}"
