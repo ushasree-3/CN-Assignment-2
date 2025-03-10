@@ -21,6 +21,9 @@ case "$option" in
     c)
         echo "Running c.py"
         sudo python3 c.py
+        sudo python3 c_2a.py
+        sudo python3 c_2b.py
+        sudo python3 c_2c.py
         ;;
     d)
         echo "Running d.py and loss=1..."
