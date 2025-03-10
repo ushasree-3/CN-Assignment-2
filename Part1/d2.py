@@ -37,7 +37,9 @@ def run_test(test_name, clients, cc=["bbr", "highspeed", "yeah"], loss=0):
 
 if __name__ == '__main__':
     test_cases = {
-        "d_2c_loss": ["h1", "h3", "h4"]
+        "d_2a": ["h1", "h2"],
+        "d_2b": ["h1", "h3"],
+        "d_2c": ["h1", "h3", "h4"]
     }
     
     loss_values = [1, 5]  # 1% and 5% loss on S2-S3
