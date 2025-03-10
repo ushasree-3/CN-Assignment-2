@@ -1,51 +1,41 @@
 from mininet.net import Mininet
-from mininet.node import RemoteController, OVSSwitch
 from mininet.cli import CLI
-from mininet.log import setLogLevel
-from time import sleep
-from mininet.link import TCLink
-
-from custom_topology_c import CustomTopologyC  # Import topology
+from topology2 import Topology
+import time
 
 def run_experiment():
-    net = Mininet(topo=CustomTopologyC(), switch=OVSSwitch, link=TCLink, controller=None)
-    net.start()
+	net = Mininet(topo=Topology())
+	net.start()
 
-    h3 = net.get('h3')
-    h7 = net.get('h7')  # Server
+	server = net.get('h7')
+	client = net.get('h3')  # Changed client to h3
 
-    print("Starting iPerf3 server on H7...")
-    h7.cmd('iperf3 -s -D &')
+	# Start TCP server in the background
+	server.cmd('iperf3 -s &')
 
-    sleep(2)
-    congestion_algorithms = ["bbr", "highspeed", "yeah"]
-    for cc in congestion_algorithms:
-        print(f"\nTesting with TCP congestion control: {cc}")
+	# Congestion control schemes
+	cc = ["bbr","highspeed","yeah"]
 
-        # === Condition 1: H3 (Client) -> H7 (Server) ===
+	for scheme in cc:
+    	print(f"Running experiment with {scheme} congestion control...")
 
-        h3.cmd(f'echo {cc} > /proc/sys/net/ipv4/tcp_congestion_control')
-        # Start tcpdump for packet capture
-        h7.cmd(f'tcpdump -i any -w c1_{cc}.pcap &')
-        sleep(2)  # Allow tcpdump to initialize
+    	# Save PCAP in the same directory as the script
+    	pcap_file = f"$(pwd)/outputs/c_{scheme}.pcap"
+    	tcpdump_pid = server.cmd(f'tcpdump -i h7-eth0 -w {pcap_file} & echo $!').strip()
+    	time.sleep(2)  # Allow tcpdump to initialize
 
-        print("Running test: H3 -> H7")
-        h3.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 150 -C {cc} &')
+    	# Start iperf3 client in the background
+    	client.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} &')
+    	time.sleep(155)  # Wait for iperf3 to complete
 
-        sleep(20)
+    	# Stop tcpdump after test
+    	server.cmd(f'kill {tcpdump_pid}')
+    	time.sleep(5)  # Ensure all packets are written to PCAP
 
-        # Stop tcpdump and save PCAP file
-        h7.cmd('killall -9 tcpdump')
-        print(f"Test completed for {cc}. PCAP saved as c1_{cc}.pcap")
+    	print(f"PCAP file saved at: outputs/c_{scheme}.pcap")
 
-        # Ensure no lingering iPerf3 processes
-        h7.cmd('killall -9 iperf3')
-
-    print("Test completed. ")
-
-    CLI(net)
-    net.stop()
+	print("Experiment complete.")
+	net.stop()  # Stop Mininet
 
 if __name__ == '__main__':
-    setLogLevel('info')
-    run_experiment()
+	run_experiment()
