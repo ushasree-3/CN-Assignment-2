@@ -1,59 +1,48 @@
 from mininet.net import Mininet
-from mininet.node import OVSSwitch
-from mininet.cli import CLI
-from mininet.log import setLogLevel
-from time import sleep
+from topology3 import Topology
+import time
 
-from custom_topology_c import CustomTopologyC
+def run_test(test_name, clients, cc=["bbr", "highspeed","yeah"]):
+	"""Runs an experiment with given clients and congestion control scheme."""
+	net = Mininet(topo=Topology())
+	net.start()
 
-def run_experiment():
-    net = Mininet(topo=CustomTopologyC(), switch=OVSSwitch, controller=None)
-    net.start()
+	server = net.get('h7')
+    
+	for scheme in cc:
+    	print(f"Running {test_name} with {scheme} congestion control...")
+   	 
+    	# Start server
+    	server.cmd('iperf3 -s &')
+    	time.sleep(2)
 
-    h1 = net.get('h1')
-    h2 = net.get('h2')
-    h3 = net.get('h3')
-    h4 = net.get('h4')
-    h7 = net.get('h7')
+    	# Start packet capture
+    	pcap_file = f"$(pwd)/outputs/{test_name}_{scheme}.pcap"
+    	tcpdump_pid = server.cmd(f'tcpdump -i h7-eth0 -w {pcap_file} & echo $!').strip()
+    	time.sleep(2)
 
-    print("Starting iPerf3 server on H7...")
-    h7.cmd('iperf3 -s -D &')  # Start iPerf3 server in daemon mode
-    sleep(2)
+    	# Start clients
+    	for client_name in clients:
+        	client = net.get(client_name)
+        	client.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} &')
 
-    congestion_algos = ['bbr', 'highspeed', 'yeah']
+    	time.sleep(155)
 
-    # Define conditions with respective clients
-    conditions = {
-        "2a": ["H1", "H2"],
-        "2b": ["H1", "H3"],
-        "2c": ["H1", "H3", "H4"]
-    }
+    	# Stop packet capture
+    	server.cmd(f'kill {tcpdump_pid}')
+    	server.cmd('pkill iperf3')  # Ensure iperf3 is fully terminated
+    	print(f"PCAP file saved: outputs/{test_name}_{scheme}.pcap")
 
-    # Run experiments for each congestion control algorithm
-    for cc in congestion_algos:
-        print(f"\nTesting congestion control: {cc}")
-        for condition, clients in conditions.items():
-            print(f"Running test: {', '.join(clients)} -> H7 with {cc}")
-
-            # Set congestion control algorithm for each client
-            for client in clients:
-                host = net.get(client.lower())
-                host.cmd(f'echo {cc} > /proc/sys/net/ipv4/tcp_congestion_control')
-
-            # Start packet capture for this condition
-            h7.cmd(f'tcpdump -i any -w c_{condition}_{cc}.pcap &')
-
-            # Start iPerf3 clients
-            for client in clients:
-                host = net.get(client.lower())
-                host.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 150 &')
-
-            sleep(20)  # Allow time for the test to complete
-            h7.cmd('killall -9 tcpdump')  # Stop packet capture
-
-    CLI(net)
-    net.stop()
+	net.stop()
 
 if __name__ == '__main__':
-    setLogLevel('info')
-    run_experiment()
+	test_cases = {
+    	"c_2a": ["h1", "h2"],
+    	"c_2b": ["h1", "h3"],
+    	"c_2c": ["h1", "h3", "h4"]
+	}
+    
+	for test_name, clients in test_cases.items():
+    	run_test(test_name, clients)
+    	time.sleep(5)  # Short break between tests to clear packets
+
