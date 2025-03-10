@@ -1,53 +1,42 @@
 from mininet.net import Mininet
-from mininet.node import RemoteController, OVSSwitch
 from mininet.cli import CLI
-from mininet.log import setLogLevel
-from time import sleep
-from mininet.link import TCLink
-
-from custom_topology_c import CustomTopologyC  # Import topology
+from topology2 import Topology
+import time
 
 def run_experiment(loss):
-    net = Mininet(topo=CustomTopologyC(loss=loss), switch=OVSSwitch, link=TCLink, controller=None)
+    net = Mininet(topo=Topology(loss=loss))  # Pass loss parameter
     net.start()
 
-    h3 = net.get('h3')
-    h7 = net.get('h7')  # Server
+    server = net.get('h7')
+    client = net.get('h3')  # Client remains H3
 
-    print("Starting iPerf3 server on H7...")
-    h7.cmd('iperf3 -s -D &')
+    # Start TCP server in the background
+    server.cmd('iperf3 -s &')
 
-    sleep(2)
-    congestion_algorithms = ["bbr", "highspeed", "yeah"]
-    for cc in congestion_algorithms:
-        print(f"\nTesting with TCP congestion control: {cc} and loss={loss}%")
+    # Congestion control schemes
+    cc = ["bbr","highspeed","yeah"]
 
-        # === Condition 1: H3 (Client) -> H7 (Server) ===
-        h3.cmd(f'echo {cc} > /proc/sys/net/ipv4/tcp_congestion_control')
-        
-        # Start tcpdump for packet capture
-        h7.cmd(f'tcpdump -i any -w d1_{cc}_loss{loss}.pcap &')
-        sleep(2)  # Allow tcpdump to initialize
+    for scheme in cc:
+        print(f"Running experiment with {scheme} congestion control and {loss}% packet loss...")
 
-        print("Running test: H3 -> H7")
-        h3.cmd(f'iperf3 -c {h7.IP()} -p 5201 -b 10M -P 10 -t 150 -C {cc} &')
+        # Save PCAP in the same directory as the script
+        pcap_file = f"$(pwd)/outputs/d_{scheme}_loss{loss}.pcap"
+        tcpdump_pid = server.cmd(f'tcpdump -i h7-eth0 -w {pcap_file} & echo $!').strip()
+        time.sleep(2)  # Allow tcpdump to initialize
 
-        sleep(20)
+        # Start iperf3 client in the background
+        client.cmd(f'iperf3 -c {server.IP()} -p 5201 -b 10M -P 10 -t 150 -C {scheme} &')
+        time.sleep(155)  # Wait for iperf3 to complete
 
-        # Stop tcpdump and save PCAP file
-        h7.cmd('killall -9 tcpdump')
-        print(f"Test completed for {cc} with loss={loss}%. PCAP saved as d1_{cc}_loss{loss}.pcap")
+        # Stop tcpdump after test
+        server.cmd(f'kill {tcpdump_pid}')
+        time.sleep(5)  # Ensure all packets are written to PCAP
 
-        # Ensure no lingering iPerf3 processes
-        h7.cmd('killall -9 iperf3')
+        print(f"PCAP file saved at: outputs/d_{scheme}_loss{loss}.pcap")
 
-    print("Test completed.")
-
-    CLI(net)
-    net.stop()
+    print("Experiment complete.")
+    net.stop()  # Stop Mininet
 
 if __name__ == '__main__':
-    setLogLevel('info')
-    for loss in [1, 5]:  # Run for both 1% and 5% loss
-        print(f"\nRunning experiment with link loss {loss}% on S2-S3...")
+    for loss in [1, 5]:  # Run for 1% and 5% packet loss
         run_experiment(loss)
