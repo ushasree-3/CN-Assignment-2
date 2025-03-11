@@ -4,18 +4,18 @@ import csv
 
 def extract_metrics(pcap_file):
     # Extract goodput (only considering TCP data packets, no retransmissions)
-    cmd_goodput = f"tshark -r {pcap_file} -Y 'tcp.analysis.retransmission == 0 && tcp.analysis.duplicate_ack == 0' -T fields -e frame.len"
+    cmd_goodput = f"tshark -r {pcap_file} -Y 'tcp.len > 0 && !tcp.analysis.retransmission && !tcp.analysis.duplicate_ack' -T fields -e frame.len"
     result_goodput = subprocess.run(cmd_goodput, shell=True, capture_output=True, text=True)
     
     goodput_bytes = sum(int(pkt_len) for pkt_len in result_goodput.stdout.splitlines() if pkt_len.isdigit())
 
     # Extract total TCP packets
-    cmd_total_tcp = f"tshark -r {pcap_file} -Y 'tcp' | wc -l"
-    total_tcp_packets = int(subprocess.run(cmd_total_tcp, shell=True, capture_output=True, text=True).stdout.strip())
+    cmd_total_tcp = f"tshark -r {pcap_file} -Y 'tcp' -T fields -e frame.number | wc -l"
+    total_tcp_packets = int(subprocess.run(cmd_total_tcp, shell=True, capture_output=True, text=True).stdout.strip() or 0)
 
     # Extract lost packets using TCP retransmissions and duplicate ACKs
     cmd_lost = f"tshark -r {pcap_file} -Y 'tcp.analysis.retransmission || tcp.analysis.duplicate_ack' | wc -l"
-    lost_packets = int(subprocess.run(cmd_lost, shell=True, capture_output=True, text=True).stdout.strip())
+    lost_packets = int(subprocess.run(cmd_lost, shell=True, capture_output=True, text=True).stdout.strip() or 0)
 
     # Compute packet loss rate
     packet_loss_rate = (lost_packets / total_tcp_packets) * 100 if total_tcp_packets > 0 else 0
